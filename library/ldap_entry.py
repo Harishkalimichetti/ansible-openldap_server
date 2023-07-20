@@ -19,18 +19,9 @@
 # You should have received a copy of the GNU General Public License
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 
-
-from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils.pycompat24 import get_exception
-
-try:
-    import ldap
-    import ldap.modlist
-    import ldap.sasl
-
-    HAS_LDAP = True
-except ImportError:
-    HAS_LDAP = False
+ANSIBLE_METADATA = {'metadata_version': '1.0',
+                    'status': ['preview'],
+                    'supported_by': 'community'}
 
 
 DOCUMENTATION = """
@@ -110,6 +101,14 @@ options:
     default: present
     description:
       - The target state of the entry.
+  validate_cets:
+    required: false
+    choices: ['yes', 'no']
+    default: 'yes'
+    description:
+      - IF Cno), SSL certificates will not be validated. This should only be
+        used on sites using self-signed certificates.
+    version_added: "2.4"
 """
 
 
@@ -157,6 +156,19 @@ RETURN = """
 # Default return values
 """
 
+from ansible.module_utils.basic import AnsibleModule
+from ansible.module_utils.pycompat24 import get_exception
+import json
+
+try:
+    import ldap
+    import ldap.modlist
+    import ldap.sasl
+
+    HAS_LDAP = True
+except ImportError:
+    HAS_LDAP = False
+
 
 class LdapEntry(object):
     def __init__(self, module):
@@ -168,7 +180,8 @@ class LdapEntry(object):
         self.server_uri = self.module.params['server_uri']
         self.start_tls = self.module.params['start_tls']
         self.state = self.module.params['state']
-
+        self.verify_cert = self.module.params['validate_certs']
+        
         # Add the objectClass into the list of attributes
         self.module.params['attributes']['objectClass'] = (
             self.module.params['objectClass'])
@@ -231,6 +244,9 @@ class LdapEntry(object):
         return is_present
 
     def _connect_to_ldap(self):
+        if not self.verity_cert:
+            ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_NEVER)
+
         connection = ldap.initialize(self.server_uri)
 
         if self.start_tls:
@@ -265,6 +281,7 @@ def main():
             'server_uri': dict(default='ldapi:///'),
             'start_tls': dict(default=False, type='bool'),
             'state': dict(default='present', choices=['present', 'absent']),
+            'validate_certs': dict(default=True, type='bool'),
         },
         supports_check_mode=True,
     )
